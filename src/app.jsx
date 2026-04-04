@@ -4,10 +4,22 @@ import Login from './pages/Login'
 import Challenges from './pages/Challenges'
 import Scoreboard from './pages/Scoreboard'
 import GMPanel from './pages/GMPanel'
+import Teams from './pages/Teams'
 import Navbar from './components/Navbar'
 
 function ProtectedRoute({ children, requiredRole }) {
-  const { user } = useAuth()
+  const { user, bootstrapping } = useAuth()
+
+  if (bootstrapping) {
+    return (
+      <div className="container py-5 text-center">
+        <div className="spinner-border" style={{ color: 'var(--accent)' }} role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    )
+  }
+
   if (!user) return <Navigate to="/login" replace />
   if (requiredRole && user.role !== requiredRole) {
     return <Navigate to="/challenges" replace />
@@ -31,6 +43,11 @@ export default function App() {
           <Route path="/scoreboard" element={
             <ProtectedRoute>
               <Scoreboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/teams" element={
+            <ProtectedRoute>
+              <Teams />
             </ProtectedRoute>
           } />
           <Route path="/gm" element={

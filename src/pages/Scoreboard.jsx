@@ -1,17 +1,39 @@
 import { useState, useEffect } from 'react'
-import { mockStandings } from '../data/mockData'
+import { scoreboardApi } from '../lib/api'
 
 export default function Scoreboard() {
   const [standings, setStandings] = useState([])
   const [loading, setLoading]     = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const sorted = [...mockStandings].sort((a, b) => b.score - a.score)
-      setStandings(sorted)
-      setLoading(false)
-    }, 700)
-    return () => clearTimeout(timer)
+    let mounted = true
+
+    async function fetchStandings() {
+      try {
+        const data = await scoreboardApi.list()
+        if (mounted) {
+          setStandings(data.standings || [])
+          setError('')
+        }
+      } catch (err) {
+        if (mounted) {
+          setError(err.message || 'Failed to load scoreboard.')
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    fetchStandings()
+    const interval = setInterval(fetchStandings, 15000)
+
+    return () => {
+      mounted = false
+      clearInterval(interval)
+    }
   }, [])
 
   const getRankClass = (index) => {
@@ -68,6 +90,10 @@ export default function Scoreboard() {
                   LOADING STANDINGS...
                 </p>
               </div>
+            )}
+
+            {!!error && (
+              <div className="grid-alert grid-alert-danger p-3 mb-3 rounded">⚠ {error}</div>
             )}
 
             {!loading && standings.length > 0 && (

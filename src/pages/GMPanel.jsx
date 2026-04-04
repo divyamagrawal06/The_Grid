@@ -1,8 +1,10 @@
-import { useState } from 'react'
-import { mockChallenges } from '../data/mockData'
+import { useEffect, useMemo, useState } from 'react'
+import { adminApi } from '../lib/api'
 
 export default function GMPanel() {
-  const [challenges, setChallenges]         = useState(mockChallenges)
+  const [challenges, setChallenges] = useState([])
+  const [stats, setStats] = useState(null)
+  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm]             = useState(false)
   const [editingChallenge, setEditingChallenge] = useState(null)
   const [feedback, setFeedback]             = useState(null)
@@ -13,6 +15,39 @@ export default function GMPanel() {
   const handleFormChange = (e) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }))
   }
+
+  const refreshData = async () => {
+    const [challengeRes, statsRes] = await Promise.all([
+      adminApi.listChallenges(),
+      adminApi.stats(),
+    ])
+    setChallenges(challengeRes.challenges || [])
+    setStats(statsRes.stats || null)
+  }
+
+  useEffect(() => {
+    let mounted = true
+
+    async function load() {
+      setLoading(true)
+      try {
+        await refreshData()
+      } catch (err) {
+        if (mounted) {
+          setFeedback({ type: 'error', msg: err.message || 'Failed to load admin data.' })
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    load()
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   const handleAddNew = () => {
     setEditingChallenge(null)
@@ -36,44 +71,57 @@ export default function GMPanel() {
 
   const handleDelete = (challengeId) => {
     if (!window.confirm('Delete this challenge?')) return
-    setChallenges(prev => prev.filter(c => c.id !== challengeId))
-    setFeedback({ type: 'success', msg: 'Challenge deleted.' })
+    adminApi
+      .deleteChallenge(challengeId)
+      .then(async () => {
+        await refreshData()
+        setFeedback({ type: 'success', msg: 'Challenge deleted.' })
+      })
+      .catch((err) => {
+        setFeedback({ type: 'error', msg: err.message || 'Failed to delete challenge.' })
+      })
   }
 
-  const handleFormSubmit = (e) => {
+  const handleFormSubmit = async (e) => {
     e.preventDefault()
     if (!formData.name || !formData.category || !formData.value) {
       setFeedback({ type: 'error', msg: 'Name, category, and points are required.' })
       return
     }
-    if (editingChallenge) {
-      setChallenges(prev => prev.map(c =>
-        c.id === editingChallenge.id
-          ? { ...c, name: formData.name, category: formData.category, value: parseInt(formData.value), description: formData.description }
-          : c
-      ))
-      setFeedback({ type: 'success', msg: `"${formData.name}" updated successfully.` })
-    } else {
-      const newChallenge = {
-        id:           Math.max(...challenges.map(c => c.id)) + 1,
-        name:         formData.name,
-        category:     formData.category,
-        value:        parseInt(formData.value),
-        description:  formData.description,
-        solved_by_me: false,
-        tags:         [],
+
+    try {
+      if (editingChallenge) {
+        await adminApi.updateChallenge(editingChallenge.id, {
+          name: formData.name,
+          category: formData.category,
+          value: Number(formData.value),
+          description: formData.description,
+          ...(formData.flag ? { flag: formData.flag } : {}),
+        })
+        setFeedback({ type: 'success', msg: `"${formData.name}" updated successfully.` })
+      } else {
+        await adminApi.createChallenge({
+          name: formData.name,
+          category: formData.category,
+          value: Number(formData.value),
+          description: formData.description,
+          flag: formData.flag,
+        })
+        setFeedback({ type: 'success', msg: `"${formData.name}" added successfully.` })
       }
-      setChallenges(prev => [...prev, newChallenge])
-      setFeedback({ type: 'success', msg: `"${formData.name}" added successfully.` })
+      await refreshData()
+      setShowForm(false)
+      setEditingChallenge(null)
+      setFormData({ name: '', category: '', value: '', description: '', flag: '' })
+    } catch (err) {
+      setFeedback({ type: 'error', msg: err.message || 'Failed to save challenge.' })
     }
-    setShowForm(false)
-    setEditingChallenge(null)
   }
 
-  const categoryCount = challenges.reduce((acc, c) => {
+  const categoryCount = useMemo(() => challenges.reduce((acc, c) => {
     acc[c.category] = (acc[c.category] ?? 0) + 1
     return acc
-  }, {})
+  }, {}), [challenges])
 
   return (
     <div>
@@ -94,6 +142,14 @@ export default function GMPanel() {
       </div>
 
       <div className="container pb-5">
+        {loading && (
+          <div className="text-center py-5">
+            <div className="spinner-border" style={{ color: 'var(--accent)' }} role="status">
+              <span className="visually-hidden">Loading...</span>
+            </div>
+          </div>
+        )}
+
         {feedback && (
           <div className={`grid-alert p-3 mb-4 rounded ${
             feedback.type === 'success' ? 'grid-alert-success' : 'grid-alert-danger'
@@ -116,30 +172,30 @@ export default function GMPanel() {
           <div className="col-sm-6 col-md-3">
             <div className="grid-card p-3 text-center">
               <div style={{ fontFamily: 'Share Tech Mono, monospace', fontSize: '2rem', color: 'var(--accent-blue)' }}>
-                {Object.keys(categoryCount).length}
+                {stats?.teamCount ?? Object.keys(categoryCount).length}
               </div>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', letterSpacing: '2px', textTransform: 'uppercase' }}>
-                Categories
+                Teams
               </div>
             </div>
           </div>
           <div className="col-sm-6 col-md-3">
             <div className="grid-card p-3 text-center">
               <div style={{ fontFamily: 'Share Tech Mono, monospace', fontSize: '2rem', color: '#ffd700' }}>
-                {challenges.reduce((sum, c) => sum + c.value, 0).toLocaleString()}
+                {stats?.userCount ?? 0}
               </div>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', letterSpacing: '2px', textTransform: 'uppercase' }}>
-                Total Points
+                Players
               </div>
             </div>
           </div>
           <div className="col-sm-6 col-md-3">
             <div className="grid-card p-3 text-center">
               <div style={{ fontFamily: 'Share Tech Mono, monospace', fontSize: '2rem', color: 'var(--accent)' }}>
-                {challenges.filter(c => c.solved_by_me).length}
+                {stats?.submissionCount ?? 0}
               </div>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', letterSpacing: '2px', textTransform: 'uppercase' }}>
-                Solved
+                Submissions
               </div>
             </div>
           </div>
@@ -213,9 +269,9 @@ export default function GMPanel() {
                   <td><span className="grid-badge">{challenge.category}</span></td>
                   <td style={{ fontFamily: 'Share Tech Mono, monospace', color: 'var(--accent)' }}>{challenge.value}</td>
                   <td>
-                    {challenge.solved_by_me
-                      ? <span style={{ color: 'var(--accent)', fontFamily: 'Share Tech Mono, monospace', fontSize: '0.8rem' }}>✓ SOLVED</span>
-                      : <span style={{ color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace', fontSize: '0.8rem' }}>OPEN</span>
+                    {challenge.isActive
+                      ? <span style={{ color: 'var(--accent)', fontFamily: 'Share Tech Mono, monospace', fontSize: '0.8rem' }}>ACTIVE</span>
+                      : <span style={{ color: 'var(--text-muted)', fontFamily: 'Share Tech Mono, monospace', fontSize: '0.8rem' }}>DISABLED</span>
                     }
                   </td>
                   <td>
