@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { mockUsers } from '../data/mockData'
+import { authApi } from '../lib/api'
 
 export default function Login() {
   const [username, setUsername] = useState('')
@@ -22,28 +22,20 @@ export default function Login() {
     }
 
     setLoading(true)
-    await new Promise(resolve => setTimeout(resolve, 500))
 
-    const foundUser = mockUsers.find(
-      u => u.username === username && u.password === password
-    )
+    try {
+      const data = await authApi.login(username, password)
+      login(data)
 
-    setLoading(false)
-
-    if (foundUser) {
-      login({
-        id:       foundUser.id,
-        username: foundUser.username,
-        role:     foundUser.role,
-        team:     foundUser.team,
-      })
-      if (foundUser.role === 'gm') {
+      if (data.user.role === 'gm') {
         navigate('/gm')
       } else {
         navigate('/challenges')
       }
-    } else {
-      setError('Invalid username or password.')
+    } catch (err) {
+      setError(err.message || 'Invalid username or password.')
+    } finally {
+      setLoading(false)
     }
   }
 

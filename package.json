@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "api:dev": "npm --prefix backend run dev",
+    "api:start": "npm --prefix backend run start",
+    "api:seed": "npm --prefix backend run seed"
   },
   "dependencies": {
     "bootstrap": "^5.3.8",

@@ -1,12 +1,45 @@
-import { useState } from 'react'
-import { mockChallenges } from '../data/mockData'
+import { useEffect, useMemo, useState } from 'react'
+import { challengeApi } from '../lib/api'
 import ChallengeModal from '../components/ChallengeModal'
 
 export default function Challenges() {
-  const [challenges, setChallenges]           = useState(mockChallenges)
+  const [challenges, setChallenges] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [selectedChallenge, setSelectedChallenge] = useState(null)
 
-  const categories = [...new Set(challenges.map(c => c.category))]
+  useEffect(() => {
+    let mounted = true
+
+    async function loadChallenges() {
+      setLoading(true)
+      setError('')
+      try {
+        const data = await challengeApi.list()
+        if (mounted) {
+          setChallenges(data.challenges)
+        }
+      } catch (err) {
+        if (mounted) {
+          setError(err.message || 'Failed to load challenges.')
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    loadChallenges()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const categories = useMemo(
+    () => [...new Set(challenges.map((c) => c.category))],
+    [challenges]
+  )
 
   const getChallengesByCategory = (category) => {
     return challenges.filter(c => c.category === category)
@@ -22,14 +55,14 @@ export default function Challenges() {
 
   const handleSolve = (challengeId) => {
     setChallenges(prev => prev.map(c =>
-      c.id === challengeId ? { ...c, solved_by_me: true } : c
+      c.id === challengeId ? { ...c, solvedByMe: true } : c
     ))
     setSelectedChallenge(prev =>
-      prev && prev.id === challengeId ? { ...prev, solved_by_me: true } : prev
+      prev && prev.id === challengeId ? { ...prev, solvedByMe: true } : prev
     )
   }
 
-  const solvedCount = challenges.filter(c => c.solved_by_me).length
+  const solvedCount = challenges.filter(c => c.solvedByMe).length
   const totalCount  = challenges.length
 
   return (
@@ -51,6 +84,18 @@ export default function Challenges() {
       </div>
 
       <div className="container pb-5">
+        {loading && (
+          <div className="text-center py-5">
+            <div className="spinner-border" style={{ color: 'var(--accent)' }} role="status">
+              <span className="visually-hidden">Loading...</span>
+            </div>
+          </div>
+        )}
+
+        {!!error && (
+          <div className="grid-alert grid-alert-danger p-3 mb-4 rounded">⚠ {error}</div>
+        )}
+
         {categories.map(category => (
           <div key={category} className="pt-4">
             <div className="category-header mb-3">
@@ -61,7 +106,7 @@ export default function Challenges() {
                 <div key={challenge.id} className="col-sm-6 col-md-4 col-lg-3">
                   <button
                     className={`challenge-button w-100 ${
-                      challenge.solved_by_me ? 'challenge-solved' : ''
+                      challenge.solvedByMe ? 'challenge-solved' : ''
                     }`}
                     onClick={() => handleChallengeClick(challenge)}
                   >
@@ -80,6 +125,7 @@ export default function Challenges() {
       <ChallengeModal
         challenge={selectedChallenge}
         onClose={handleModalClose}
+        onSubmitFlag={challengeApi.submitFlag}
         onSolve={handleSolve}
       />
     </div>

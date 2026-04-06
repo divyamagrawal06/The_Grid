@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { validFlags } from '../data/mockData'
 
-export default function ChallengeModal({ challenge, onClose, onSolve }) {
+export default function ChallengeModal({ challenge, onClose, onSolve, onSubmitFlag }) {
   const [flag, setFlag]           = useState('')
   const [feedback, setFeedback]   = useState(null)
   const [feedbackType, setFeedbackType] = useState('')
@@ -18,17 +17,27 @@ export default function ChallengeModal({ challenge, onClose, onSolve }) {
     }
     setLoading(true)
     setFeedback(null)
-    await new Promise(resolve => setTimeout(resolve, 600))
-    const correct = validFlags[challenge.id]
-    if (flag.trim() === correct) {
-      setFeedback('🎉 Correct! Flag accepted. Points awarded!')
-      setFeedbackType('success')
-      setFlag('')
-      onSolve(challenge.id)
-    } else {
-      setFeedback('Incorrect flag. Try again.')
+    try {
+      const result = await onSubmitFlag(challenge.id, flag)
+
+      if (result.correct) {
+        if (result.alreadySolved) {
+          setFeedback('✓ Already solved by your account.')
+        } else {
+          setFeedback(`🎉 Correct! +${result.pointsAwarded} points awarded.`)
+        }
+        setFeedbackType('success')
+        setFlag('')
+        onSolve(challenge.id)
+      } else {
+        setFeedback('Incorrect flag. Try again.')
+        setFeedbackType('error')
+      }
+    } catch (err) {
+      setFeedback(err.message || 'Submission failed.')
       setFeedbackType('error')
     }
+
     setLoading(false)
   }
 
@@ -62,7 +71,7 @@ export default function ChallengeModal({ challenge, onClose, onSolve }) {
                 }}>
                   {challenge.value} pts
                 </span>
-                {challenge.solved_by_me && (
+                {challenge.solvedByMe && (
                   <span style={{
                     fontFamily: 'Share Tech Mono, monospace',
                     color: 'var(--accent)',
@@ -96,7 +105,7 @@ export default function ChallengeModal({ challenge, onClose, onSolve }) {
               </div>
             )}
 
-            {!challenge.solved_by_me && (
+            {!challenge.solvedByMe && (
               <form onSubmit={handleFlagSubmit}>
                 <label className="grid-label">Submit Flag</label>
                 <div className="d-flex gap-2">
@@ -120,7 +129,7 @@ export default function ChallengeModal({ challenge, onClose, onSolve }) {
               </form>
             )}
 
-            {challenge.solved_by_me && !feedback && (
+            {challenge.solvedByMe && !feedback && (
               <div className="grid-alert grid-alert-success p-3 rounded">
                 ✓ You have already solved this challenge.
               </div>

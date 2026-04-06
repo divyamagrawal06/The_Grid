@@ -44,6 +44,11 @@ export default function Navbar() {
                     ▸ Scoreboard
                   </Link>
                 </li>
+                <li className="nav-item">
+                  <Link className={`nav-link ${isActive('/teams') ? 'active' : ''}`} to="/teams">
+                    ▸ Teams
+                  </Link>
+                </li>
                 {user.role === 'gm' && (
                   <li className="nav-item">
                     <Link className={`nav-link ${isActive('/gm') ? 'active' : ''}`} to="/gm">
@@ -62,7 +67,7 @@ export default function Navbar() {
                     padding: '0.5rem 0.75rem',
                     letterSpacing: '1px'
                   }}>
-                    @{user.username}
+                    @{user.username}{user.team?.name ? ` [${user.team.name}]` : ''}
                   </span>
                 </li>
                 <li className="nav-item">
